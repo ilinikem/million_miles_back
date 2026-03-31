@@ -1,0 +1,96 @@
+networks:
+  internal_network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1450
+
+services:
+  redis:
+    image: redis
+    restart: always
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal_network
+
+  db:
+    image: postgres:15
+    container_name: million_miles_postgres_db
+    restart: always
+    environment:
+      - ENVIRONMENT=prod
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - postgres_data_million_miles:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+    networks:
+      - internal_network
+
+  api:
+    image: tijey89/million_miles:latest
+    container_name: million_miles_app
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=prod
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - POSTGRES_DB=${DB_NAME}
+    command: >
+      bash -c "
+      until pg_isready -h db -p 5432; do
+        echo 'Waiting for Postgres...';
+        sleep 1;
+      done &&
+      alembic upgrade head &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000
+      "
+    networks:
+      - internal_network
+
+  worker:
+    image: tijey89/million_miles:latest
+    container_name: million_miles_worker
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=prod
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - POSTGRES_DB=${DB_NAME}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    command: >
+      bash -c "
+      until pg_isready -h db -p 5432; do
+        echo 'Waiting for Postgres...';
+        sleep 1;
+      done &&
+      celery -A app.celery_worker.celery_app worker --loglevel=info -Q fast_queue
+      "
+    networks:
+      - internal_network
+
+  nginx:
+    image: tijey89/million_miles_gateway:latest
+    ports:
+      - "8006:80"
+    networks:
+      - internal_network
+    depends_on:
+      - api
+
+volumes:
+  postgres_data_million_miles:
+  redis_data:
