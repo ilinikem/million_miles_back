@@ -24,8 +24,6 @@ services:
       - POSTGRES_DB=${DB_NAME}
     volumes:
       - postgres_data_million_miles:/var/lib/postgresql/data
-    ports:
-      - "5435:5432"
     networks:
       - internal_nwk
 
