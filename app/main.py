@@ -32,7 +32,7 @@ app.include_router(million_mile.router)
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=(
-        r"^(https://million_miles\.ru|http://localhost:3000)$"
+        r"^(https://exceptos\.ru|http://localhost:3000)$"
     ),
     allow_credentials=True,
     allow_methods=["*"],
